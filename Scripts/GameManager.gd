@@ -36,7 +36,7 @@ func _ready():
 		push_error("[GameManager] Enemy Scene을 찾을 수 없습니다: " + PATH_ENEMY_SCENE)
 
 func _init_grid_system():
-	# [수정 포인트] AStar 인스턴스를 새로 생성하여 이전 세션의 잔여 데이터를 완전히 제거합니다.
+	# [그리드 초기화] AStar 인스턴스를 새로 생성하여 완전 초기화
 	_astar = AStarGrid2D.new()
 	_astar.region = Rect2i(-100, -100, 200, 200)
 	_astar.cell_size = Vector2(TILE_SIZE.x, TILE_SIZE.y)
@@ -63,7 +63,7 @@ func request_load_game():
 	var loaded_data = GameState.load_from_file()
 	if loaded_data.is_empty(): return
 
-	# 여기서 맵과 그리드를 초기화합니다.
+	# 맵과 그리드를 깨끗하게 비웁니다.
 	clear_map()
 	
 	var unit_list = loaded_data.get("units", [])
@@ -72,7 +72,6 @@ func request_load_game():
 		var type_id = TYPE_ENEMY
 		if type_str == "PLAYER": type_id = TYPE_PLAYER
 		
-		# [확인] Enemy.gd에서 저장한 grid_x, grid_y 키를 정확히 읽음
 		var gx = int(u_data.get("grid_x", 0))
 		var gy = int(u_data.get("grid_y", 0))
 		var spawn_pos = Vector2i(gx, gy)
@@ -85,6 +84,7 @@ func request_load_game():
 # [유닛 생성]
 # -------------------------------------------------------------------------
 func spawn_unit(type: int, id: int, grid_pos: Vector2i, load_data: Dictionary = {}):
+	# 로드 중이 아닐 때 이미 점유된 곳이면 생성 취소
 	if is_occupied(grid_pos) and load_data.is_empty(): 
 		return
 
@@ -100,29 +100,39 @@ func spawn_unit(type: int, id: int, grid_pos: Vector2i, load_data: Dictionary = 
 	_post_spawn_initialization(unit, load_data)
 
 func clear_map():
-	print(">>> [Map] 맵 초기화")
-	# 1. 기존 유닛 객체 제거
-	for pos in _units:
-		if is_instance_valid(_units[pos]):
-			_units[pos].queue_free()
+	print(">>> [Map] 맵 초기화 시작")
+	
+	# 1. [핵심 수정] 'unit' 그룹의 모든 노드(에디터 배치 유닛 포함)를 찾아 제거
+	# _units 딕셔너리에 없는 유닛도 처리하여 중복/유령 현상 방지
+	var all_units = get_tree().get_nodes_in_group("unit")
+	
+	for unit in all_units:
+		if is_instance_valid(unit):
+			# [중요] 삭제되기 직전 프레임에 로직이 돌아 새 그리드를 오염시키지 않도록 정지
+			unit.set_process(false)
+			unit.set_physics_process(false)
+			
+			# GridMover 컴포넌트가 있다면 별도로 정지 (자식 노드이므로)
+			if unit.has_node("GridMover"):
+				unit.get_node("GridMover").set_process(false)
+			
+			unit.queue_free()
+	
+	# 2. 데이터 초기화
 	_units.clear()
 	
-	# 2. [핵심 수정] 그리드 시스템을 재초기화하여 '유령 장애물' 제거
-	# 기존에는 _astar.update()만 호출했을 수 있으나, 이는 set_point_solid 상태를 초기화하지 않을 수 있습니다.
+	# 3. 그리드 시스템 재구축 (이 시점에서 방해할 유닛은 모두 정지됨)
 	_init_grid_system()
 
 # -------------------------------------------------------------------------
 # [내부 로직: 생성 후 처리]
 # -------------------------------------------------------------------------
 func _post_spawn_initialization(unit: Node, data: Dictionary):
-	# 데이터가 있으면 복구 (위치, HP 등)
 	if not data.is_empty() and unit.has_method("load_from_data"):
 		unit.load_from_data(data)
 	
-	# [중요] 생성된 유닛이 씬 트리에 붙고 준비될 때까지 대기
 	await get_tree().process_frame
 	
-	# 애니메이션 및 시각적 상태 동기화
 	_sync_unit_animation(unit, data)
 	unit.visible = true
 
@@ -130,19 +140,16 @@ func _sync_unit_animation(unit: Node, _data: Dictionary):
 	var anim_ctrl = unit.get_node_or_null("AnimController")
 	if not anim_ctrl: return
 	
-	# [수정] AnimController가 아직 준비 안됐을 수 있으므로 강제 초기화
 	if anim_ctrl.has_method("_init_nodes"): 
 		anim_ctrl._init_nodes()
 	
-	# 저장된 상태가 있으면 사용, 없으면 IDLE(0)
 	var state = 0 
-	var dir = 3 # 기본 방향 (남동쪽)
+	var dir = 3 
 	
 	if not _data.is_empty():
 		state = int(_data.get("current_state", 0))
 		dir = int(_data.get("current_direction", 3))
 	
-	# [수정] 강제로 애니메이션 재생 명령
 	if anim_ctrl.has_method("play_anim_by_index"): 
 		anim_ctrl.play_anim_by_index(state, dir)
 
@@ -161,6 +168,8 @@ func get_skill_data(skill_id: int) -> Dictionary:
 
 func move_unit_on_grid(unit: Node, from: Vector2i, to: Vector2i) -> bool:
 	if from == to: return true
+	
+	# 이동하려는 곳에 다른 유닛이 있으면 이동 불가
 	if is_occupied(to) and _units[to] != unit: return false
 	
 	# 이전 위치 해제
@@ -203,11 +212,14 @@ func _configure_new_unit(unit: Node, type: int, id: int, grid_pos: Vector2i):
 	var prefix = "Player" if type == TYPE_PLAYER else "Enemy"
 	unit.name = "%s_%d_%d" % [prefix, grid_pos.x, grid_pos.y]
 	unit.position = grid_to_world(grid_pos)
-	unit.visible = false # 생성 직후 깜빡임 방지
+	unit.visible = false 
 	
 	if "grid_pos" in unit: unit.grid_pos = grid_pos
 	
+	# [중요] 모든 유닛은 "unit" 그룹에 속해야 clear_map에서 정상 제거됨
+	if not unit.is_in_group("unit"): unit.add_to_group("unit")
 	if not unit.is_in_group("persist"): unit.add_to_group("persist")
+	
 	if type == TYPE_ENEMY:
 		if not unit.is_in_group("enemy"): unit.add_to_group("enemy")
 	elif type == TYPE_PLAYER:
@@ -219,8 +231,6 @@ func _register_unit_to_grid(unit: Node, grid_pos: Vector2i):
 	_astar.set_point_solid(grid_pos, true)
 
 func _load_and_apply_skin(player: Node, id: int):
-	# [주의] GameUnit에는 이 메서드가 있지만 BaseUnit에는 없을 수 있습니다.
-	# 현재 구조는 GameUnit에 맞춰져 있습니다.
 	if not player.has_method("set_textures_directly"): return
 	var path = "%s/%d/" % [BASE_SKIN_PATH, id]
 	player.set_textures_directly(

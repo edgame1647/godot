@@ -27,6 +27,10 @@ func _ready():
 		push_error("[GridMover] 부모 노드가 Node2D가 아닙니다.")
 
 func _process(delta: float):
+	# [안전장치] 부모가 삭제 대기 중이면 로직 중단
+	if not is_instance_valid(_parent) or _parent.is_queued_for_deletion():
+		return
+
 	if is_moving:
 		_process_movement(delta)
 
@@ -35,6 +39,7 @@ func _process(delta: float):
 # -------------------------------------------------------------------------
 func move_to(world_pos: Vector2):
 	if not _parent: return
+	if _parent.is_queued_for_deletion(): return # 삭제 중 이동 명령 차단
 
 	if "move_speed" in _parent:
 		move_speed = _parent.move_speed
@@ -62,11 +67,8 @@ func move_to(world_pos: Vector2):
 		is_moving = true
 		_set_next_waypoint()
 
-# [핵심 수정] 부드러운 정지 (현재 발걸음은 마치고 멈춤)
 func stop_gracefully():
 	if not is_moving: return
-	# 남은 경로만 삭제하면, _process_movement가 현재 목표까지 이동 후 
-	# _set_next_waypoint에서 경로가 없음을 확인하고 자연스럽게 멈춤.
 	current_path.clear()
 
 # -------------------------------------------------------------------------
@@ -85,12 +87,11 @@ func _set_next_waypoint():
 	else:
 		current_grid = GameManager.world_to_grid(_parent.global_position)
 	
-	# 좌표 선(先) 점유
+	# 좌표 선(先) 점유 시도
 	if GameManager.move_unit_on_grid(_parent, current_grid, next_grid):
 		_target_world_pos = GameManager.grid_to_world(next_grid)
 		_current_diff = next_grid - current_grid
 		
-		# 이동 방향 신호 방출
 		on_move_step_grid.emit(_current_diff)
 	else:
 		_stop_internal()
@@ -100,7 +101,7 @@ func _process_movement(delta: float):
 	
 	if dist < 4.0:
 		_parent.global_position = _target_world_pos
-		_set_next_waypoint() # 도착했으니 다음거 확인 (없으면 멈춤)
+		_set_next_waypoint() 
 		return
 		
 	var move_dir = _parent.global_position.direction_to(_target_world_pos)
@@ -109,4 +110,4 @@ func _process_movement(delta: float):
 func _stop_internal():
 	is_moving = false
 	current_path.clear()
-	on_move_end.emit() # 정지 신호 보냄
+	on_move_end.emit()
