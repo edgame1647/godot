@@ -1,6 +1,5 @@
 extends Node
-
-# [주의] class_name 없음 (Autoload 충돌 방지)
+# Autoload 이름: GameManager
 
 # -------------------------------------------------------------------------
 # [설정] 상수
@@ -13,39 +12,29 @@ const PATH_ENEMY_SCENE = "res://Enemy/Enemy.tscn"
 
 const TYPE_PLAYER = 0
 const TYPE_ENEMY = 1
-const TYPE_NPC = 2
 
-# -------------------------------------------------------------------------
-# [스킬 데이터베이스]
-# -------------------------------------------------------------------------
-const SKILL_DATABASE = {
-	1: { 
-		"name": "일반 공격", 
-		"range": 1, 
-		"mp_cost": 0, 
-		"anim_state": 3 # AnimController.State.ATTACK
-	},
-	2: { 
-		"name": "원거리 화염구", 
-		"range": 4, 
-		"mp_cost": 1, 
-		"anim_state": 6 # AnimController.State.ATTACK5
-	}
-}
-
-# -------------------------------------------------------------------------
-# [상태]
-# -------------------------------------------------------------------------
+var _enemy_packed_scene: PackedScene 
 var _units: Dictionary = {} 
 var _astar: AStarGrid2D
+
+# -------------------------------------------------------------------------
+# [스킬 데이터]
+# -------------------------------------------------------------------------
+const SKILL_DATABASE = {
+	1: { "name": "일반 공격", "range": 1, "mp_cost": 0, "anim_state": 3 },
+	2: { "name": "원거리 화염구", "range": 4, "mp_cost": 1, "anim_state": 6 }
+}
 
 # -------------------------------------------------------------------------
 # [초기화]
 # -------------------------------------------------------------------------
 func _ready():
 	_init_grid_system()
+	if ResourceLoader.exists(PATH_ENEMY_SCENE):
+		_enemy_packed_scene = load(PATH_ENEMY_SCENE)
+	else:
+		push_error("[GameManager] Enemy Scene을 찾을 수 없습니다: " + PATH_ENEMY_SCENE)
 
-# [누락되었던 함수 추가]
 func _init_grid_system():
 	_astar = AStarGrid2D.new()
 	_astar.region = Rect2i(-100, -100, 200, 200)
@@ -55,28 +44,47 @@ func _init_grid_system():
 	print("[GameManager] 그리드 시스템 초기화 완료")
 
 # -------------------------------------------------------------------------
-# # Region: 공개 메서드
+# [저장 및 로드]
 # -------------------------------------------------------------------------
-# region Public Methods
+func request_save_game():
+	print(">>> [GameManager] 저장 데이터 수집 중...")
+	var save_data = { "units": [] }
+	
+	var nodes = get_tree().get_nodes_in_group("persist")
+	for unit in nodes:
+		if unit.has_method("get_save_data"):
+			save_data["units"].append(unit.get_save_data())
+	
+	GameState.save_to_file(save_data)
 
-# 스킬 데이터 조회 함수
-func get_skill_data(skill_id: int) -> Dictionary:
-	if SKILL_DATABASE.has(skill_id):
-		return SKILL_DATABASE[skill_id]
-	print("오류: 존재하지 않는 스킬 ID입니다 (%d)" % skill_id)
-	return {}
+func request_load_game():
+	print(">>> [GameManager] 로드 요청...")
+	var loaded_data = GameState.load_from_file()
+	if loaded_data.is_empty(): return
 
-func clear_map():
-	print(">>> [Map] 맵 초기화")
-	for pos in _units:
-		var unit = _units[pos]
-		if is_instance_valid(unit):
-			unit.queue_free()
-	_units.clear()
-	_init_grid_system()
+	clear_map()
+	
+	var unit_list = loaded_data.get("units", [])
+	for u_data in unit_list:
+		var type_str = u_data.get("type", "ENEMY")
+		var type_id = TYPE_ENEMY
+		if type_str == "PLAYER": type_id = TYPE_PLAYER
+		
+		# [확인] Enemy.gd에서 저장한 grid_x, grid_y 키를 정확히 읽음
+		var gx = int(u_data.get("grid_x", 0))
+		var gy = int(u_data.get("grid_y", 0))
+		var spawn_pos = Vector2i(gx, gy)
+		
+		spawn_unit(type_id, 1, spawn_pos, u_data)
+	
+	print(">>> [GameManager] 로드 완료.")
 
+# -------------------------------------------------------------------------
+# [유닛 생성]
+# -------------------------------------------------------------------------
 func spawn_unit(type: int, id: int, grid_pos: Vector2i, load_data: Dictionary = {}):
-	if is_occupied(grid_pos): return
+	if is_occupied(grid_pos) and load_data.is_empty(): 
+		return
 
 	var unit = _create_unit_instance(type)
 	if not unit: return
@@ -84,20 +92,73 @@ func spawn_unit(type: int, id: int, grid_pos: Vector2i, load_data: Dictionary = 
 	_configure_new_unit(unit, type, id, grid_pos)
 	_register_unit_to_grid(unit, grid_pos)
 
-	get_tree().current_scene.call_deferred("add_child", unit)
+	var main_scene = get_tree().current_scene
+	main_scene.call_deferred("add_child", unit)
+
 	_post_spawn_initialization(unit, load_data)
+
+func clear_map():
+	print(">>> [Map] 맵 초기화")
+	for pos in _units:
+		if is_instance_valid(_units[pos]):
+			_units[pos].queue_free()
+	_units.clear()
+	_astar.update()
+
+# -------------------------------------------------------------------------
+# [내부 로직: 생성 후 처리]
+# -------------------------------------------------------------------------
+func _post_spawn_initialization(unit: Node, data: Dictionary):
+	# 데이터가 있으면 복구 (위치, HP 등)
+	if not data.is_empty() and unit.has_method("load_from_data"):
+		unit.load_from_data(data)
+	
+	# [중요] 생성된 유닛이 씬 트리에 붙고 준비될 때까지 대기
+	await get_tree().process_frame
+	
+	# 애니메이션 및 시각적 상태 동기화
+	_sync_unit_animation(unit, data)
+	unit.visible = true
+
+func _sync_unit_animation(unit: Node, _data: Dictionary):
+	var anim_ctrl = unit.get_node_or_null("AnimController")
+	if not anim_ctrl: return
+	
+	# [수정] AnimController가 아직 준비 안됐을 수 있으므로 강제 초기화
+	if anim_ctrl.has_method("_init_nodes"): 
+		anim_ctrl._init_nodes()
+	
+	# 저장된 상태가 있으면 사용, 없으면 IDLE(0)
+	var state = 0 
+	var dir = 3 # 기본 방향 (남동쪽)
+	
+	if not _data.is_empty():
+		state = int(_data.get("current_state", 0))
+		dir = int(_data.get("current_direction", 3))
+	
+	# [수정] 강제로 애니메이션 재생 명령
+	if anim_ctrl.has_method("play_anim_by_index"): 
+		anim_ctrl.play_anim_by_index(state, dir)
+
+# ... (나머지 is_walkable, world_to_grid 등 유틸리티 함수는 그대로 유지) ...
+func is_walkable(grid_pos: Vector2i) -> bool:
+	if not _astar: return false
+	if not _astar.region.has_point(grid_pos): return false
+	if _astar.is_point_solid(grid_pos): return false
+	return true
+
+func get_skill_data(skill_id: int) -> Dictionary:
+	if SKILL_DATABASE.has(skill_id): return SKILL_DATABASE[skill_id]
+	return {}
 
 func move_unit_on_grid(unit: Node, from: Vector2i, to: Vector2i) -> bool:
 	if from == to: return true
 	if is_occupied(to) and _units[to] != unit: return false
-	
 	if _units.get(from) == unit:
 		_units.erase(from)
 		_astar.set_point_solid(from, false)
-	
 	_units[to] = unit
 	_astar.set_point_solid(to, true)
-	
 	if "grid_pos" in unit: unit.grid_pos = to
 	return true
 
@@ -119,58 +180,31 @@ func grid_to_world(grid_pos: Vector2i) -> Vector2:
 	var y = (grid_pos.x + grid_pos.y) * (TILE_SIZE.y * 0.5)
 	return Vector2(x, y)
 
-# endregion
-
-# -------------------------------------------------------------------------
-# # Region: 내부 로직
-# -------------------------------------------------------------------------
-# region Private Methods
-
 func _create_unit_instance(type: int) -> Node:
-	var scene_path = ""
-	match type:
-		TYPE_PLAYER: scene_path = PATH_PLAYER_SCENE
-		TYPE_ENEMY: scene_path = PATH_ENEMY_SCENE
-	
-	if scene_path != "" and ResourceLoader.exists(scene_path):
-		var scn = load(scene_path)
-		if scn: return scn.instantiate()
+	if type == TYPE_PLAYER:
+		return load(PATH_PLAYER_SCENE).instantiate()
+	elif type == TYPE_ENEMY:
+		if _enemy_packed_scene: return _enemy_packed_scene.instantiate()
 	return null
 
 func _configure_new_unit(unit: Node, type: int, id: int, grid_pos: Vector2i):
 	var prefix = "Player" if type == TYPE_PLAYER else "Enemy"
 	unit.name = "%s_%d_%d" % [prefix, grid_pos.x, grid_pos.y]
 	unit.position = grid_to_world(grid_pos)
-	unit.visible = false
+	unit.visible = false # 생성 직후 깜빡임 방지
 	
-	if "grid_pos" in unit:
-		unit.grid_pos = grid_pos
-		
-	if type == TYPE_PLAYER:
+	if "grid_pos" in unit: unit.grid_pos = grid_pos
+	
+	if not unit.is_in_group("persist"): unit.add_to_group("persist")
+	if type == TYPE_ENEMY:
+		if not unit.is_in_group("enemy"): unit.add_to_group("enemy")
+	elif type == TYPE_PLAYER:
+		if not unit.is_in_group("player"): unit.add_to_group("player")
 		_load_and_apply_skin(unit, id)
 
 func _register_unit_to_grid(unit: Node, grid_pos: Vector2i):
 	_units[grid_pos] = unit
 	_astar.set_point_solid(grid_pos, true)
-
-func _post_spawn_initialization(unit: Node, data: Dictionary):
-	await get_tree().process_frame
-	await get_tree().process_frame
-	if not is_instance_valid(unit): return
-	if not data.is_empty() and unit.has_method("load_from_data"): unit.load_from_data(data)
-	_sync_unit_animation(unit, data)
-	unit.visible = true
-
-func _sync_unit_animation(unit: Node, _data: Dictionary):
-	var anim_ctrl = unit.get_node_or_null("AnimController")
-	if not anim_ctrl: return
-	if anim_ctrl.has_method("_init_nodes"): anim_ctrl._init_nodes()
-	
-	var state = unit.get("current_state") if "current_state" in unit else 0
-	var dir = unit.get("current_direction") if "current_direction" in unit else 3
-	
-	if anim_ctrl.has_method("_update_texture_by_state"): anim_ctrl._update_texture_by_state(state)
-	if anim_ctrl.has_method("play_anim_by_index"): anim_ctrl.play_anim_by_index(state, dir)
 
 func _load_and_apply_skin(player: Node, id: int):
 	if not player.has_method("set_textures_directly"): return
@@ -183,5 +217,3 @@ func _load_and_apply_skin(player: Node, id: int):
 
 func _load_safe(path: String) -> Texture2D:
 	return load(path) if FileAccess.file_exists(path) else null
-
-# endregion
