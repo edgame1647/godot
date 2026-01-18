@@ -1,12 +1,12 @@
-[gd_scene load_steps=65 format=3 uid="uid://4pbc2kvi430t"]
+[gd_scene load_steps=65 format=3 uid="uid://dxgygkeprd178"]
 
-[ext_resource type="Script" uid="uid://d0aa10a0ekxue" path="res://Scripts/player.gd" id="1_3qydi"]
-[ext_resource type="Texture2D" uid="uid://cs0bah0qcxssx" path="res://Images/Characters/Player/AttackRun.png" id="3_p7tob"]
-[ext_resource type="Script" uid="uid://cltwmg83y6jsu" path="res://Scripts/anim_controller.gd" id="5_6ysni"]
-[ext_resource type="PackedScene" uid="uid://bx0c80gqhhr2c" path="res://Scenes/HealthBar.tscn" id="5_8g4oa"]
-[ext_resource type="Script" uid="uid://bpvjstidmcb0g" path="res://Scripts/grid_mover.gd" id="8_s1rgi"]
+[ext_resource type="Script" uid="uid://dt010y32c7cbg" path="res://Scripts/enemy.gd" id="1_vso2s"]
+[ext_resource type="Texture2D" uid="uid://cs0bah0qcxssx" path="res://Images/Characters/Player/AttackRun.png" id="2_52jmu"]
+[ext_resource type="Script" uid="uid://cltwmg83y6jsu" path="res://Scripts/anim_controller.gd" id="3_1ypri"]
+[ext_resource type="PackedScene" uid="uid://bx0c80gqhhr2c" path="res://Scenes/HealthBar.tscn" id="5_fkela"]
+[ext_resource type="Script" uid="uid://bpvjstidmcb0g" path="res://Scripts/grid_mover.gd" id="9_uxjip"]
 
-[sub_resource type="AnimationNodeStateMachine" id="AnimationNodeStateMachine_s1rgi"]
+[sub_resource type="AnimationNodeStateMachine" id="AnimationNodeStateMachine_uxjip"]
 
 [sub_resource type="Animation" id="Animation_yifbt"]
 length = 0.6
@@ -920,37 +920,41 @@ _data = {
 &"new_animation": SubResource("Animation_s1rgi")
 }
 
-[node name="Player" type="CharacterBody2D" groups=["player"]]
+[node name="Enemy" type="CharacterBody2D" groups=["enemy"]]
 motion_mode = 1
-script = ExtResource("1_3qydi")
+script = ExtResource("1_vso2s")
+attack_range = null
+detection_range = null
+patrol_radius = null
+attack_cooldown = null
+character_id = null
+move_speed = null
+max_hp = null
+hp = null
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-texture = ExtResource("3_p7tob")
+texture = ExtResource("2_52jmu")
 hframes = 15
 vframes = 8
-frame = 90
-
-[node name="Camera2D" type="Camera2D" parent="."]
-zoom = Vector2(1.5, 1.5)
 
 [node name="AnimationTree" type="AnimationTree" parent="."]
 active = false
-tree_root = SubResource("AnimationNodeStateMachine_s1rgi")
-
-[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
-deterministic = true
-libraries = {
-&"": SubResource("AnimationLibrary_j23h2")
-}
+tree_root = SubResource("AnimationNodeStateMachine_uxjip")
+advance_expression_base_node = NodePath("")
 
 [node name="AttackTimer" type="Timer" parent="."]
 
 [node name="BuffTimer" type="Timer" parent="."]
 
-[node name="HealthBar" parent="." instance=ExtResource("5_8g4oa")]
+[node name="HealthBar" parent="." instance=ExtResource("5_fkela")]
 
 [node name="AnimController" type="Node" parent="."]
-script = ExtResource("5_6ysni")
+script = ExtResource("3_1ypri")
 
 [node name="GridMover" type="Node" parent="."]
-script = ExtResource("8_s1rgi")
+script = ExtResource("9_uxjip")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_j23h2")
+}

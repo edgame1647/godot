@@ -1,99 +1,92 @@
 class_name AnimController
 extends Node
 
-# -------------------------------------------------------------------------
-# [리소스 설정]
-# -------------------------------------------------------------------------
-@export_group("Unit Textures") 
-@export var texture_idle: Texture2D
-@export var texture_run: Texture2D
-@export var texture_walk: Texture2D
-@export var texture_attack: Texture2D
-@export var texture_die: Texture2D 
-@export var texture_take_damage: Texture2D 
-@export var texture_cast_spell: Texture2D 
+enum State { IDLE, WALK, RUN, ATTACK, DIE, TAKE_DAMAGE, ATTACK5 }
 
-# GameUnit.State 와 일치해야 함
-enum State { IDLE, RUN, WALK, ATTACK, DIE, TAKE_DAMAGE, ATTACK5 }
+@export var anim_player: AnimationPlayer
+@export var sprite: Sprite2D 
 
-const DIR_NAMES = ["E", "SE", "S", "SW", "W", "NW", "N", "NE"]
+var folder_path: String = "" 
+var character_id: int = 1
+var _texture_cache: Dictionary = {}
 
-# [내부 변수]
-var parent: Node = null
-var sprite: Sprite2D = null
-var anim_player: AnimationPlayer = null
+const DIR_NAMES = ["NE", "E", "SE", "S", "SW", "W", "NW", "N"]
+var current_dir_index: int = 3
+var current_state: State = State.IDLE
 
-var current_state: int = State.IDLE
-var current_dir_index: int = 3 
+var state_prefixes = {
+	State.IDLE: "Idle",
+	State.WALK: "Walk",
+	State.RUN: "Run",
+	State.ATTACK: "Attack",
+	State.DIE: "Die",
+	State.TAKE_DAMAGE: "Hit",
+	State.ATTACK5: "Skill"
+}
 
 func _ready():
-	_init_nodes() 
+	if not anim_player:
+		anim_player = find_child("AnimationPlayer", false, false)
+		if not anim_player and get_parent():
+			anim_player = get_parent().find_child("AnimationPlayer", true, false)
+			
+	if not sprite:
+		sprite = find_child("Sprite2D", false, false)
+		if not sprite and get_parent():
+			sprite = get_parent().find_child("Sprite2D", true, false)
 
-func _init_nodes():
-	if not parent: parent = get_parent()
-	if not parent: return 
+func set_config(path: String, id: int):
+	var need_refresh = (folder_path != path) or (character_id != id)
+	folder_path = path
+	character_id = id
+	if need_refresh:
+		_texture_cache.clear()
+		_update_texture_by_state(int(current_state))
 
-	if not sprite: sprite = parent.get_node_or_null("Sprite2D")
-	if not anim_player: anim_player = parent.get_node_or_null("AnimationPlayer")
+func play_anim(state_idx: int):
+	play_anim_by_index(state_idx, current_dir_index)
 
-# -------------------------------------------------------------------------
-# [애니메이션 제어]
-# -------------------------------------------------------------------------
-# [수정] state 타입을 State(Enum)에서 int로 변경하여 호환성 확보
-func play_anim_by_index(state: int, dir_index: int):
-	_init_nodes()
+func play_anim_by_index(state_idx: int, dir_index: int):
+	current_state = state_idx as State
+	current_dir_index = wrapi(dir_index, 0, 8)
 	
-	if current_state != state:
-		current_state = state
-		_update_texture_by_state(state)
+	_update_texture_by_state(state_idx)
 	
-	current_dir_index = dir_index
-	_play_animation_internal()
-
-# [수정] state 타입을 int로 변경
-func play_anim(state: int, _dir: Vector2 = Vector2.ZERO):
-	_init_nodes()
-	# 벡터 기반 호출 시에도 내부적으로는 인덱스나 상태만 갱신 (필요 시 확장)
-	if current_state != state:
-		current_state = state
-		_update_texture_by_state(state)
+	var prefix = state_prefixes.get(state_idx, "Idle")
+	var suffix = DIR_NAMES[current_dir_index]
+	var anim_name = "%s_%s" % [prefix, suffix]
 	
-	_play_animation_internal()
+	if anim_player:
+		if not anim_player.has_animation(anim_name):
+			if anim_player.has_animation(prefix):
+				anim_name = prefix
+			else:
+				return
 
-func _play_animation_internal():
-	if not anim_player: return 
-
-	var state_str = _get_state_string(current_state)
-	var dir_suffix = DIR_NAMES[current_dir_index % 8]
-	var anim_name = "%s_%s" % [state_str, dir_suffix]
-	
-	if anim_player.has_animation(anim_name):
+		# [핵심 수정] 이동/대기 동작은 무조건 루프(반복) 되도록 강제 설정
+		# 이렇게 하면 애니메이션 파일 설정이 Loop가 아니어도 끊김 없이 재생됨
+		if state_idx in [int(State.IDLE), int(State.WALK), int(State.RUN)]:
+			var anim_res = anim_player.get_animation(anim_name)
+			if anim_res:
+				anim_res.loop_mode = Animation.LOOP_LINEAR
+		
+		# 이미 재생 중이면 다시 실행하지 않음 (끊김 방지)
+		if anim_player.current_animation == anim_name and anim_player.is_playing():
+			return
+		
 		anim_player.play(anim_name)
 
-# [수정] state 타입을 int로 변경
-func _update_texture_by_state(state: int):
-	if not sprite: return 
-
-	var target_tex: Texture2D = null
-	match state:
-		State.IDLE: target_tex = texture_idle
-		State.RUN: target_tex = texture_run
-		State.WALK: target_tex = texture_walk
-		State.ATTACK: target_tex = texture_attack
-		State.DIE: target_tex = texture_die 
-		State.TAKE_DAMAGE: target_tex = texture_take_damage 
-		State.ATTACK5: target_tex = texture_cast_spell 
-	
-	if target_tex:
-		sprite.texture = target_tex
-
-func _get_state_string(state: int) -> String:
-	match state:
-		State.IDLE: return "Idle"
-		State.RUN: return "Run"
-		State.WALK: return "Walk"
-		State.ATTACK: return "Attack"
-		State.DIE: return "Die"
-		State.TAKE_DAMAGE: return "TakeDamage"
-		State.ATTACK5: return "Attack5"
-	return "Idle"
+func _update_texture_by_state(state_idx: int):
+	if not sprite or folder_path.is_empty(): return
+	var st = state_idx as State
+	var file_name = state_prefixes.get(st, "Idle")
+	if _texture_cache.has(file_name):
+		if sprite.texture != _texture_cache[file_name]:
+			sprite.texture = _texture_cache[file_name]
+		return
+	var full_path = "%s/%d/%s.png" % [folder_path, character_id, file_name]
+	if ResourceLoader.exists(full_path):
+		var tex = load(full_path)
+		if tex:
+			_texture_cache[file_name] = tex
+			sprite.texture = tex

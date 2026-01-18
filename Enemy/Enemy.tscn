@@ -1,16 +1,10 @@
-[gd_scene load_steps=71 format=3 uid="uid://dxgygkeprd178"]
+[gd_scene load_steps=65 format=3 uid="uid://dxgygkeprd178"]
 
 [ext_resource type="Script" uid="uid://dt010y32c7cbg" path="res://Scripts/enemy.gd" id="1_vso2s"]
 [ext_resource type="Texture2D" uid="uid://cs0bah0qcxssx" path="res://Images/Characters/Player/AttackRun.png" id="2_52jmu"]
 [ext_resource type="Script" uid="uid://cltwmg83y6jsu" path="res://Scripts/anim_controller.gd" id="3_1ypri"]
-[ext_resource type="Texture2D" uid="uid://dap5sqw70x0ya" path="res://Images/Characters/Player/Idle.png" id="4_uxjip"]
 [ext_resource type="PackedScene" uid="uid://bx0c80gqhhr2c" path="res://Scenes/HealthBar.tscn" id="5_fkela"]
-[ext_resource type="Texture2D" uid="uid://b7aekx427axk4" path="res://Images/Characters/Player/1/Run.png" id="5_kvarv"]
-[ext_resource type="Texture2D" uid="uid://cfl6qyspgislv" path="res://Images/Characters/Player/1/Walk.png" id="6_52jmu"]
-[ext_resource type="Texture2D" uid="uid://cm82ghsevpnya" path="res://Images/Characters/Player/1/Attack5.png" id="7_yqk80"]
-[ext_resource type="Texture2D" uid="uid://dw4ffgm0r7822" path="res://Images/Characters/Player/1/Die.png" id="9_52jmu"]
 [ext_resource type="Script" uid="uid://bpvjstidmcb0g" path="res://Scripts/grid_mover.gd" id="9_uxjip"]
-[ext_resource type="Texture2D" uid="uid://bt8132uof1ylq" path="res://Images/Characters/Player/1/TakeDamage.png" id="10_yqk80"]
 
 [sub_resource type="AnimationNodeStateMachine" id="AnimationNodeStateMachine_uxjip"]
 
@@ -948,12 +942,6 @@ advance_expression_base_node = NodePath("")
 
 [node name="AnimController" type="Node" parent="."]
 script = ExtResource("3_1ypri")
-texture_idle = ExtResource("4_uxjip")
-texture_run = ExtResource("5_kvarv")
-texture_walk = ExtResource("6_52jmu")
-texture_attack = ExtResource("7_yqk80")
-texture_die = ExtResource("9_52jmu")
-texture_take_damage = ExtResource("10_yqk80")
 
 [node name="GridMover" type="Node" parent="."]
 script = ExtResource("9_uxjip")
