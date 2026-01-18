@@ -1,0 +1,13 @@
+{
+  "base_stats": {
+	"max_health": 100,
+	"max_mana": 50,
+	"damage": 50,
+	"speed": 100.0,
+	"attack_speed": 1.0,
+	"attack_range": 32
+  },
+  "combat_settings": {
+	"attack_impact_frame": 2
+  }
+}

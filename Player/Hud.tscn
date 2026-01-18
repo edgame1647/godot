@@ -1,0 +1,190 @@
+[gd_scene load_steps=6 format=3 uid="uid://d2yr2nfb441h4"]
+
+[ext_resource type="Script" uid="uid://dq0juscy283pu" path="res://Scripts/hud.gd" id="1_tw5hv"]
+[ext_resource type="Texture2D" uid="uid://dk6g7y8bkb7rf" path="res://Images/hud/plat.png" id="2_774wl"]
+[ext_resource type="Texture2D" uid="uid://d1ta3r5to60ds" path="res://Images/hud/hp_bar.png" id="3_i04t3"]
+[ext_resource type="Texture2D" uid="uid://xp8klsm3fxxw" path="res://Images/hud/plat - 복사본.png" id="3_oymyd"]
+[ext_resource type="Texture2D" uid="uid://dbjgadtudokgr" path="res://Images/hud/mp_bar.png" id="5_oymyd"]
+
+[node name="HUD" type="CanvasLayer"]
+script = ExtResource("1_tw5hv")
+
+[node name="BottomBar" type="Control" parent="."]
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 3
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_top = -100.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="BarContainer" type="HBoxContainer" parent="BottomBar"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -144.5
+offset_top = -6.0
+offset_right = 144.5
+offset_bottom = 6.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 1
+
+[node name="ColorRect2" type="ColorRect" parent="BottomBar/BarContainer"]
+custom_minimum_size = Vector2(150, 20)
+layout_mode = 2
+color = Color(0.223529, 0.192157, 0.192157, 1)
+
+[node name="ColorRect" type="ColorRect" parent="BottomBar/BarContainer/ColorRect2"]
+custom_minimum_size = Vector2(148, 16)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -74.0
+offset_top = -8.0
+offset_right = 74.0
+offset_bottom = 8.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0941176, 0.0627451, 0.0627451, 1)
+
+[node name="TextureRect" type="TextureRect" parent="BottomBar/BarContainer/ColorRect2/ColorRect"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -72.0
+offset_top = -6.0
+offset_right = 72.0
+offset_bottom = 6.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_774wl")
+
+[node name="HP_ProgressBar" type="TextureProgressBar" parent="BottomBar/BarContainer/ColorRect2/ColorRect/TextureRect"]
+unique_name_in_owner = true
+layout_mode = 2
+offset_left = 1.0
+offset_top = 1.0
+offset_right = 143.0
+offset_bottom = 11.0
+value = 100.0
+nine_patch_stretch = true
+texture_under = ExtResource("3_oymyd")
+texture_progress = ExtResource("3_i04t3")
+
+[node name="HP_Label" type="Label" parent="BottomBar/BarContainer/ColorRect2/ColorRect/TextureRect/HP_ProgressBar"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -8.0
+offset_right = 20.0
+offset_bottom = 8.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Label" type="Label" parent="BottomBar/BarContainer/ColorRect2/ColorRect/TextureRect/HP_ProgressBar"]
+layout_mode = 1
+anchors_preset = 4
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_left = -2.0
+offset_top = -7.0
+offset_right = 38.0
+offset_bottom = 17.0
+grow_vertical = 2
+text = "HP"
+
+[node name="ColorRect4" type="ColorRect" parent="BottomBar/BarContainer"]
+custom_minimum_size = Vector2(150, 20)
+layout_mode = 2
+color = Color(0.223529, 0.192157, 0.192157, 1)
+
+[node name="ColorRect" type="ColorRect" parent="BottomBar/BarContainer/ColorRect4"]
+custom_minimum_size = Vector2(148, 16)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -74.0
+offset_top = -8.0
+offset_right = 74.0
+offset_bottom = 8.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0941176, 0.0627451, 0.0627451, 1)
+
+[node name="TextureRect" type="TextureRect" parent="BottomBar/BarContainer/ColorRect4/ColorRect"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -72.0
+offset_top = -6.0
+offset_right = 72.0
+offset_bottom = 6.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_774wl")
+
+[node name="MP_ProgressBar" type="TextureProgressBar" parent="BottomBar/BarContainer/ColorRect4/ColorRect/TextureRect"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -71.0
+offset_top = -5.0
+offset_right = 71.0
+offset_bottom = 5.0
+grow_horizontal = 2
+grow_vertical = 2
+value = 100.0
+nine_patch_stretch = true
+texture_under = ExtResource("3_oymyd")
+texture_progress = ExtResource("5_oymyd")
+
+[node name="MP_Label" type="Label" parent="BottomBar/BarContainer/ColorRect4/ColorRect/TextureRect/MP_ProgressBar"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -8.0
+offset_right = 20.0
+offset_bottom = 8.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Label" type="Label" parent="BottomBar/BarContainer/ColorRect4/ColorRect/TextureRect/MP_ProgressBar"]
+layout_mode = 0
+offset_left = -2.0
+offset_top = -2.0
+offset_right = 38.0
+offset_bottom = 14.0
+text = "MP"
