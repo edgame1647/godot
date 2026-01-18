@@ -36,6 +36,7 @@ func _ready():
 		push_error("[GameManager] Enemy Scene을 찾을 수 없습니다: " + PATH_ENEMY_SCENE)
 
 func _init_grid_system():
+	# [수정 포인트] AStar 인스턴스를 새로 생성하여 이전 세션의 잔여 데이터를 완전히 제거합니다.
 	_astar = AStarGrid2D.new()
 	_astar.region = Rect2i(-100, -100, 200, 200)
 	_astar.cell_size = Vector2(TILE_SIZE.x, TILE_SIZE.y)
@@ -62,6 +63,7 @@ func request_load_game():
 	var loaded_data = GameState.load_from_file()
 	if loaded_data.is_empty(): return
 
+	# 여기서 맵과 그리드를 초기화합니다.
 	clear_map()
 	
 	var unit_list = loaded_data.get("units", [])
@@ -99,11 +101,15 @@ func spawn_unit(type: int, id: int, grid_pos: Vector2i, load_data: Dictionary = 
 
 func clear_map():
 	print(">>> [Map] 맵 초기화")
+	# 1. 기존 유닛 객체 제거
 	for pos in _units:
 		if is_instance_valid(_units[pos]):
 			_units[pos].queue_free()
 	_units.clear()
-	_astar.update()
+	
+	# 2. [핵심 수정] 그리드 시스템을 재초기화하여 '유령 장애물' 제거
+	# 기존에는 _astar.update()만 호출했을 수 있으나, 이는 set_point_solid 상태를 초기화하지 않을 수 있습니다.
+	_init_grid_system()
 
 # -------------------------------------------------------------------------
 # [내부 로직: 생성 후 처리]
@@ -140,7 +146,9 @@ func _sync_unit_animation(unit: Node, _data: Dictionary):
 	if anim_ctrl.has_method("play_anim_by_index"): 
 		anim_ctrl.play_anim_by_index(state, dir)
 
-# ... (나머지 is_walkable, world_to_grid 등 유틸리티 함수는 그대로 유지) ...
+# -------------------------------------------------------------------------
+# [유틸리티]
+# -------------------------------------------------------------------------
 func is_walkable(grid_pos: Vector2i) -> bool:
 	if not _astar: return false
 	if not _astar.region.has_point(grid_pos): return false
@@ -154,9 +162,13 @@ func get_skill_data(skill_id: int) -> Dictionary:
 func move_unit_on_grid(unit: Node, from: Vector2i, to: Vector2i) -> bool:
 	if from == to: return true
 	if is_occupied(to) and _units[to] != unit: return false
+	
+	# 이전 위치 해제
 	if _units.get(from) == unit:
 		_units.erase(from)
 		_astar.set_point_solid(from, false)
+	
+	# 새 위치 점유
 	_units[to] = unit
 	_astar.set_point_solid(to, true)
 	if "grid_pos" in unit: unit.grid_pos = to
@@ -207,6 +219,8 @@ func _register_unit_to_grid(unit: Node, grid_pos: Vector2i):
 	_astar.set_point_solid(grid_pos, true)
 
 func _load_and_apply_skin(player: Node, id: int):
+	# [주의] GameUnit에는 이 메서드가 있지만 BaseUnit에는 없을 수 있습니다.
+	# 현재 구조는 GameUnit에 맞춰져 있습니다.
 	if not player.has_method("set_textures_directly"): return
 	var path = "%s/%d/" % [BASE_SKIN_PATH, id]
 	player.set_textures_directly(

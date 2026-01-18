@@ -22,6 +22,9 @@ var _target: Node2D = null
 # [로드 상태 플래그]
 var _loaded_from_data: bool = false
 
+# [최적화 변수: 마지막 이동 목표]
+var _last_target_grid: Vector2i = Vector2i.MAX
+
 func _init():
 	move_speed = 80.0 
 
@@ -33,7 +36,7 @@ func _ready():
 	if spawn_grid == Vector2i.ZERO:
 		spawn_grid = GameManager.world_to_grid(global_position)
 	
-	# [중요] 세이브 파일에서 로드된 게 아닐 때만 초기화 (로드 데이터 덮어쓰기 방지)
+	# [중요] 세이브 파일에서 로드된 게 아닐 때만 초기화
 	if not _loaded_from_data:
 		chase_timer = give_up_time
 
@@ -55,10 +58,23 @@ func is_busy() -> bool:
 # -------------------------------------------------------------------------
 func execute_move(target_pos: Vector2):
 	is_patrolling = false
-	if mover: mover.move_to(target_pos)
+	
+	if not mover: return
+
+	# [최적화] 이미 해당 목표 그리드로 이동 중이라면 경로 재계산 스킵
+	var new_target_grid = GameManager.world_to_grid(target_pos)
+	if mover.is_moving and _last_target_grid == new_target_grid:
+		return
+	
+	_last_target_grid = new_target_grid
+	mover.move_to(target_pos)
 
 func execute_attack(target_unit: Node2D):
-	if mover and mover.is_moving: mover.stop_gracefully(); return 
+	if mover and mover.is_moving: 
+		mover.stop_gracefully()
+		_last_target_grid = Vector2i.MAX # 정지 시 목표 초기화
+		return 
+		
 	if attack_timer > 0: return
 	
 	current_state = State.ATTACK
@@ -75,12 +91,16 @@ func execute_patrol():
 	var rx = randi_range(-patrol_radius, patrol_radius)
 	var ry = randi_range(-patrol_radius, patrol_radius)
 	var target_pos = GameManager.grid_to_world(spawn_grid + Vector2i(rx, ry))
+	
 	if mover:
+		# 패트롤은 랜덤성이므로 즉시 이동하되, 너무 잦은 호출 방지는 상위 로직에 의존
 		mover.move_to(target_pos)
 		patrol_wait_timer = randf_range(1.0, 3.0) 
 
 func execute_stop():
-	if mover and mover.is_moving: mover.stop_gracefully()
+	if mover and mover.is_moving: 
+		mover.stop_gracefully()
+	_last_target_grid = Vector2i.MAX
 	is_patrolling = false
 
 # -------------------------------------------------------------------------
@@ -91,25 +111,19 @@ func get_save_data() -> Dictionary:
 	data["type"] = "ENEMY"
 	data["spawn_grid_x"] = spawn_grid.x
 	data["spawn_grid_y"] = spawn_grid.y
-	data["chase_timer"] = chase_timer # 추적 시간도 저장
+	data["chase_timer"] = chase_timer 
 	return data
 
 func load_from_data(data: Dictionary):
-	# 로드 시작 표시
 	_loaded_from_data = true
-	
 	super.load_from_data(data)
 	spawn_grid = Vector2i(data.get("spawn_grid_x", 0), data.get("spawn_grid_y", 0))
 	chase_timer = data.get("chase_timer", 0.0)
 	
-	# [핵심 수정] 트리에 이미 있을 때만 플레이어 찾기 시도
-	# 아직 트리에 없다면 나중에 _ready()가 실행되면서 찾을 것임
 	if is_inside_tree():
 		_find_player()
 
 func _find_player():
-	# [핵심 수정] 트리에 없으면 안전하게 리턴 (오류 방지)
 	if not is_inside_tree(): return
-	
 	var players = get_tree().get_nodes_in_group("player")
 	if players.size() > 0: _target = players[0]
