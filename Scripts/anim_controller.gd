@@ -23,7 +23,7 @@ var parent: Node = null
 var sprite: Sprite2D = null
 var anim_player: AnimationPlayer = null
 
-var current_state: State = State.IDLE
+var current_state: int = State.IDLE
 var current_dir_index: int = 3 
 
 func _ready():
@@ -39,7 +39,8 @@ func _init_nodes():
 # -------------------------------------------------------------------------
 # [애니메이션 제어]
 # -------------------------------------------------------------------------
-func play_anim_by_index(state: State, dir_index: int):
+# [수정] state 타입을 State(Enum)에서 int로 변경하여 호환성 확보
+func play_anim_by_index(state: int, dir_index: int):
 	_init_nodes()
 	
 	if current_state != state:
@@ -49,7 +50,8 @@ func play_anim_by_index(state: State, dir_index: int):
 	current_dir_index = dir_index
 	_play_animation_internal()
 
-func play_anim(state: State, _dir: Vector2 = Vector2.ZERO):
+# [수정] state 타입을 int로 변경
+func play_anim(state: int, _dir: Vector2 = Vector2.ZERO):
 	_init_nodes()
 	# 벡터 기반 호출 시에도 내부적으로는 인덱스나 상태만 갱신 (필요 시 확장)
 	if current_state != state:
@@ -68,7 +70,8 @@ func _play_animation_internal():
 	if anim_player.has_animation(anim_name):
 		anim_player.play(anim_name)
 
-func _update_texture_by_state(state: State):
+# [수정] state 타입을 int로 변경
+func _update_texture_by_state(state: int):
 	if not sprite: return 
 
 	var target_tex: Texture2D = null
@@ -84,7 +87,7 @@ func _update_texture_by_state(state: State):
 	if target_tex:
 		sprite.texture = target_tex
 
-func _get_state_string(state: State) -> String:
+func _get_state_string(state: int) -> String:
 	match state:
 		State.IDLE: return "Idle"
 		State.RUN: return "Run"

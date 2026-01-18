@@ -939,7 +939,10 @@ _data = {
 [node name="Player" type="CharacterBody2D" groups=["player"]]
 motion_mode = 1
 script = ExtResource("1_3qydi")
+show_debug_range = null
+debug_color = null
 outline_material = SubResource("ShaderMaterial_dm7nj")
+move_speed = null
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 texture = ExtResource("3_p7tob")

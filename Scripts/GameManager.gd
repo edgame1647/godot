@@ -8,11 +8,9 @@ extends Node
 const TILE_SIZE = Vector2i(64, 32)
 const BASE_SKIN_PATH = "res://Images/Characters/Player"
 
-# [핵심 수정] 순환 참조 방지를 위해 preload 대신 경로 문자열만 저장
 const PATH_PLAYER_SCENE = "res://Player/Player.tscn"
 const PATH_ENEMY_SCENE = "res://Enemy/Enemy.tscn"
 
-# [핵심 수정] Enum 대신 상수(const) 사용 (접근 안정성 확보)
 const TYPE_PLAYER = 0
 const TYPE_ENEMY = 1
 const TYPE_NPC = 2
@@ -20,7 +18,7 @@ const TYPE_NPC = 2
 # -------------------------------------------------------------------------
 # [상태]
 # -------------------------------------------------------------------------
-var _units: Dictionary = {}
+var _units: Dictionary = {} # 좌표 기반 검색용 (충돌 체크)
 var _astar: AStarGrid2D
 
 # -------------------------------------------------------------------------
@@ -38,12 +36,14 @@ func _init_grid_system():
 	print("[GameManager] 그리드 시스템 초기화 완료")
 
 # -------------------------------------------------------------------------
-# # Region: 공개 메서드
+# # Region: 공개 메서드 (관리)
 # -------------------------------------------------------------------------
 # region Public Methods
 
 func clear_map():
 	print(">>> [Map] 맵 초기화")
+	# AIManager는 Enemy들이 삭제(_exit_tree)되면서 알아서 비워짐
+	
 	for pos in _units:
 		var unit = _units[pos]
 		if is_instance_valid(unit):
@@ -51,37 +51,24 @@ func clear_map():
 	_units.clear()
 	_init_grid_system()
 
-# [수정] type 인자를 int로 변경 (순환 참조 방지)
 func spawn_unit(type: int, id: int, grid_pos: Vector2i, load_data: Dictionary = {}):
 	if is_occupied(grid_pos):
-		print("!!! [생성 실패] 위치 중복: ", grid_pos)
 		return
 
-	# 1. 인스턴스 생성 (여기서 load)
 	var unit = _create_unit_instance(type)
-	if not unit: 
-		print("!!! [생성 실패] 씬 로드 실패 Type: ", type)
-		return
+	if not unit: return
 
-	# 2. 설정
 	_configure_new_unit(unit, type, id, grid_pos)
-
-	# 3. 등록
 	_register_unit_to_grid(unit, grid_pos)
-
-	# 4. 추가
-	get_tree().current_scene.call_deferred("add_child", unit)
-
-	# 5. 후처리
-	_post_spawn_initialization(unit, load_data)
 	
-	print(">>> 유닛 생성: %s (Type: %d)" % [grid_pos, type])
+	# [변경] 여기서 직접 AI 등록을 하지 않음. (Enemy._ready에서 AIManager로 등록함)
+
+	get_tree().current_scene.call_deferred("add_child", unit)
+	_post_spawn_initialization(unit, load_data)
 
 func move_unit_on_grid(unit: Node, from: Vector2i, to: Vector2i) -> bool:
 	if from == to: return true
-
-	if is_occupied(to) and _units[to] != unit:
-		return false
+	if is_occupied(to) and _units[to] != unit: return false
 	
 	if _units.get(from) == unit:
 		_units.erase(from)
@@ -90,9 +77,7 @@ func move_unit_on_grid(unit: Node, from: Vector2i, to: Vector2i) -> bool:
 	_units[to] = unit
 	_astar.set_point_solid(to, true)
 	
-	if "grid_pos" in unit:
-		unit.grid_pos = to
-		
+	if "grid_pos" in unit: unit.grid_pos = to
 	return true
 
 func get_path_route(from: Vector2i, to: Vector2i) -> Array[Vector2i]:
@@ -121,7 +106,6 @@ func grid_to_world(grid_pos: Vector2i) -> Vector2:
 # region Private Methods
 
 func _create_unit_instance(type: int) -> Node:
-	# [핵심 수정] 런타임에 load하여 의존성 분리
 	var scene_path = ""
 	match type:
 		TYPE_PLAYER: scene_path = PATH_PLAYER_SCENE
@@ -151,42 +135,29 @@ func _register_unit_to_grid(unit: Node, grid_pos: Vector2i):
 func _post_spawn_initialization(unit: Node, data: Dictionary):
 	await get_tree().process_frame
 	await get_tree().process_frame
-	
 	if not is_instance_valid(unit): return
-
-	if not data.is_empty() and unit.has_method("load_from_data"):
-		unit.load_from_data(data)
-	
+	if not data.is_empty() and unit.has_method("load_from_data"): unit.load_from_data(data)
 	_sync_unit_animation(unit, data)
 	unit.visible = true
 
 func _sync_unit_animation(unit: Node, _data: Dictionary):
 	var anim_ctrl = unit.get_node_or_null("AnimController")
 	if not anim_ctrl: return
-	
-	if anim_ctrl.has_method("_init_nodes"): 
-		anim_ctrl._init_nodes()
+	if anim_ctrl.has_method("_init_nodes"): anim_ctrl._init_nodes()
 	
 	var state = unit.get("current_state") if "current_state" in unit else 0
 	var dir = unit.get("current_direction") if "current_direction" in unit else 3
 	
-	if anim_ctrl.has_method("_update_texture_by_state"):
-		anim_ctrl._update_texture_by_state(state)
-	if anim_ctrl.has_method("play_anim_by_index"):
-		anim_ctrl.play_anim_by_index(state, dir)
+	if anim_ctrl.has_method("_update_texture_by_state"): anim_ctrl._update_texture_by_state(state)
+	if anim_ctrl.has_method("play_anim_by_index"): anim_ctrl.play_anim_by_index(state, dir)
 
 func _load_and_apply_skin(player: Node, id: int):
 	if not player.has_method("set_textures_directly"): return
-	
 	var path = "%s/%d/" % [BASE_SKIN_PATH, id]
 	player.set_textures_directly(
-		_load_safe(path + "Idle.png"),
-		_load_safe(path + "Run.png"),
-		_load_safe(path + "Walk.png"),
-		_load_safe(path + "Attack.png"),
-		_load_safe(path + "Die.png"),
-		_load_safe(path + "TakeDamage.png"),
-		_load_safe(path + "Attack5.png")
+		_load_safe(path + "Idle.png"), _load_safe(path + "Run.png"), _load_safe(path + "Walk.png"),
+		_load_safe(path + "Attack.png"), _load_safe(path + "Die.png"), 
+		_load_safe(path + "TakeDamage.png"), _load_safe(path + "Attack5.png")
 	)
 
 func _load_safe(path: String) -> Texture2D:
