@@ -16,9 +16,27 @@ const TYPE_ENEMY = 1
 const TYPE_NPC = 2
 
 # -------------------------------------------------------------------------
+# [스킬 데이터베이스]
+# -------------------------------------------------------------------------
+const SKILL_DATABASE = {
+	1: { 
+		"name": "일반 공격", 
+		"range": 1, 
+		"mp_cost": 0, 
+		"anim_state": 3 # AnimController.State.ATTACK
+	},
+	2: { 
+		"name": "원거리 화염구", 
+		"range": 4, 
+		"mp_cost": 1, 
+		"anim_state": 6 # AnimController.State.ATTACK5
+	}
+}
+
+# -------------------------------------------------------------------------
 # [상태]
 # -------------------------------------------------------------------------
-var _units: Dictionary = {} # 좌표 기반 검색용 (충돌 체크)
+var _units: Dictionary = {} 
 var _astar: AStarGrid2D
 
 # -------------------------------------------------------------------------
@@ -27,6 +45,7 @@ var _astar: AStarGrid2D
 func _ready():
 	_init_grid_system()
 
+# [누락되었던 함수 추가]
 func _init_grid_system():
 	_astar = AStarGrid2D.new()
 	_astar.region = Rect2i(-100, -100, 200, 200)
@@ -36,14 +55,19 @@ func _init_grid_system():
 	print("[GameManager] 그리드 시스템 초기화 완료")
 
 # -------------------------------------------------------------------------
-# # Region: 공개 메서드 (관리)
+# # Region: 공개 메서드
 # -------------------------------------------------------------------------
 # region Public Methods
 
+# 스킬 데이터 조회 함수
+func get_skill_data(skill_id: int) -> Dictionary:
+	if SKILL_DATABASE.has(skill_id):
+		return SKILL_DATABASE[skill_id]
+	print("오류: 존재하지 않는 스킬 ID입니다 (%d)" % skill_id)
+	return {}
+
 func clear_map():
 	print(">>> [Map] 맵 초기화")
-	# AIManager는 Enemy들이 삭제(_exit_tree)되면서 알아서 비워짐
-	
 	for pos in _units:
 		var unit = _units[pos]
 		if is_instance_valid(unit):
@@ -52,16 +76,13 @@ func clear_map():
 	_init_grid_system()
 
 func spawn_unit(type: int, id: int, grid_pos: Vector2i, load_data: Dictionary = {}):
-	if is_occupied(grid_pos):
-		return
+	if is_occupied(grid_pos): return
 
 	var unit = _create_unit_instance(type)
 	if not unit: return
 
 	_configure_new_unit(unit, type, id, grid_pos)
 	_register_unit_to_grid(unit, grid_pos)
-	
-	# [변경] 여기서 직접 AI 등록을 하지 않음. (Enemy._ready에서 AIManager로 등록함)
 
 	get_tree().current_scene.call_deferred("add_child", unit)
 	_post_spawn_initialization(unit, load_data)
@@ -101,7 +122,7 @@ func grid_to_world(grid_pos: Vector2i) -> Vector2:
 # endregion
 
 # -------------------------------------------------------------------------
-# # Region: 내부 로직 (Private)
+# # Region: 내부 로직
 # -------------------------------------------------------------------------
 # region Private Methods
 
